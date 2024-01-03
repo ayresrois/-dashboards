@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd" name="Declaracao_Faturamento_Exatus" language="groovy" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20">
+	<property name="ireport.zoom" value="1.1289478601075547"/>
+	<property name="ireport.x" value="0"/>
+	<property name="ireport.y" value="0"/>
+	<parameter name="P_DTINICIAL" class="java.sql.Timestamp">
+		<parameterDescription><![CDATA[Data Inicial]]></parameterDescription>
+	</parameter>
+	<parameter name="P_DTFINAL" class="java.sql.Timestamp">
+		<parameterDescription><![CDATA[Data Final]]></parameterDescription>
+	</parameter>
+	<parameter name="P_CODEMP" class="java.lang.String">
+		<parameterDescription><![CDATA[Cód. Empresa(s) para faturamento (Separado por virgula)]]></parameterDescription>
+		<defaultValueExpression><![CDATA[String.valueOf("0")]]></defaultValueExpression>
+	</parameter>
+	<parameter name="P_CODEMPEND" class="java.lang.String">
+		<parameterDescription><![CDATA[Cód. Empresa para Endereço]]></parameterDescription>
+		<defaultValueExpression><![CDATA[String.valueOf("1")]]></defaultValueExpression>
+	</parameter>
+	<queryString>
+		<![CDATA[SELECT V.*
+,' Declaramos para os devidos fins, que '|| EM.RAZAOSOCIALEMP ||
+' estabelecida na '||EM.TIPO ||
+' '|| NOMEENDEMP ||
+', '||NUMENDEMP ||
+', bairro '||RTRIM(NOMEBAIEMP) ||
+', na cidade de '|| NOMECIDEMP || '-'||UFEMP ||
+', CEP '||CEPEMP ||
+', inscrita no CNPJ '||formatar_cpf_cnpj(CGCEMP)||
+',  teve um faturamento líquido no período de '||  TO_CHAR($P{P_DTINICIAL},'DD/MM/YYYY') || ' a ' || TO_CHAR($P{P_DTFINAL},'DD/MM/YYYY')  || ' , correspondente ao abaixo relacionado: '
+AS TEXTO
+
+FROM (
+
+    select
+    to_char(CAB.DTENTSAI,'MONTH-YYYY') AS MES
+    ,TO_CHAR(CAB.DTENTSAI,'YYYY') AS ANO
+    ,TO_CHAR(CAB.DTENTSAI,'MM') AS ORDEM
+    ,SUM( ( ((ITE.VLRTOT - ITE.VLRDESC - ITE.VLRREPRED + ITE.VLRSUBST + ITE.VLRIPI) * VCA.INDITENSBRUTO) * CASE WHEN TPO.BONIFICACAO = 'S' THEN 0 ELSE 1 END * TPO.GOLDEV ) ) AS VLRNOTA
+
+             FROM TGFCAB CAB INNER JOIN  TGFTOP TPO ON CAB.CODTIPOPER = TPO.CODTIPOPER AND CAB.DHTIPOPER = TPO.DHALTER
+                            INNER JOIN  TGFITE ITE ON CAB.NUNOTA = ITE.NUNOTA
+                            INNER JOIN  VGFCAB VCA ON CAB.NUNOTA = VCA.NUNOTA
+            				INNER JOIN TGFNAT NAT ON NAT.CODNAT = CAB.CODNAT
+            				LEFT JOIN TGFNAT PAI ON  PAI.CODNAT = NAT.CODNATPAI
+            				LEFT JOIN TGFNAT AVO ON AVO.CODNAT = PAI.CODNATPAI
+
+             WHERE NVL((CAB.DTENTSAI),CAB.DTMOV) >= $P{P_DTINICIAL} and NVL((CAB.DTENTSAI),CAB.DTMOV) <= $P{P_DTFINAL}
+            AND TPO.GOLSINAL = -1
+            AND TPO.ATUALCTB = 'S'
+             AND CAB.CODEMP  IN  ($P!{P_CODEMP})
+            AND CAB.STATUSNOTA = 'L'
+            AND (NOT EXISTS(SELECT 1 FROM TGFVAR VAR WHERE VAR.NUNOTA = ITE.NUNOTA AND VAR.NUNOTAORIG = VAR.NUNOTA AND VAR.SEQUENCIAORIG = ITE.SEQUENCIA))
+            AND (TPO.ATUALFINTERC <> 'N' OR TPO.ATUALESTTERC = 'N' OR  ITE.TERCEIROS <> 'S')
+            AND ITE.SEQUENCIA > 0
+
+            GROUP BY to_char(CAB.DTENTSAI,'MONTH-YYYY'),TO_CHAR(CAB.DTENTSAI,'MM') ,TO_CHAR(CAB.DTENTSAI,'YYYY')
+            )V ,
+              (SELECT
+                EMP.CODEMP
+                ,EMP.RAZAOSOCIAL AS RAZAOSOCIALEMP, ENDEEMP.TIPO
+                ,ENDEEMP.NOMEEND AS NOMEENDEMP, EMP.NUMEND AS NUMENDEMP
+                ,EMP.COMPLEMENTO AS COMPEMP,CIDEMP.NOMECID AS NOMECIDEMP
+                ,BAIEMP.NOMEBAI AS NOMEBAIEMP
+                ,EMP.CEP AS CEPEMP
+                ,UFSEMP.UF AS UFEMP
+                ,EMP.CGC AS CGCEMP
+                ,EMP.INSCESTAD AS INSCESTADEMP, EMP.TELEFONE AS TELEFONEEMP
+
+                FROM
+                TSIEMP EMP
+                  JOIN TSIEND ENDEEMP ON EMP.CODEND = ENDEEMP.CODEND
+                  JOIN TSICID CIDEMP ON EMP.CODCID = CIDEMP.CODCID
+                  JOIN TSIBAI BAIEMP ON EMP.CODBAI = BAIEMP.CODBAI
+                  JOIN TSIUFS UFSEMP ON CIDEMP.UF = UFSEMP.CODUF
+                WHERE EMP.CODEMP = $P{P_CODEMPEND}
+                )EM
+ORDER BY ANO,ORDEM]]>
+	</queryString>
+	<field name="MES" class="java.lang.String"/>
+	<field name="ANO" class="java.lang.String"/>
+	<field name="ORDEM" class="java.lang.String"/>
+	<field name="VLRNOTA" class="java.math.BigDecimal"/>
+	<field name="TEXTO" class="java.lang.String"/>
+	<variable name="V_VLRNOTA" class="java.math.BigDecimal" calculation="Sum">
+		<variableExpression><![CDATA[$F{VLRNOTA}]]></variableExpression>
+	</variable>
+	<background>
+		<band splitType="Stretch"/>
+	</background>
+	<title>
+		<band height="206" splitType="Stretch">
+			<staticText>
+				<reportElement x="0" y="95" width="555" height="20"/>
+				<textElement textAlignment="Center">
+					<font size="14" isBold="true"/>
+				</textElement>
+				<text><![CDATA[Declaração ]]></text>
+			</staticText>
+			<textField pattern="#,##0.00">
+				<reportElement x="28" y="136" width="497" height="70"/>
+				<box leftPadding="20" rightPadding="15"/>
+				<textElement textAlignment="Justified"/>
+				<textFieldExpression class="java.lang.String"><![CDATA[$F{TEXTO}]]></textFieldExpression>
+			</textField>
+			<image>
+				<reportElement x="455" y="10" width="100" height="50"/>
+				<imageExpression class="java.lang.String"><![CDATA["http://www.sqabrasil.com/home/images/logo@2x.png"]]></imageExpression>
+			</image>
+		</band>
+	</title>
+	<pageHeader>
+		<band height="35" splitType="Stretch"/>
+	</pageHeader>
+	<columnHeader>
+		<band height="20" splitType="Stretch">
+			<staticText>
+				<reportElement x="287" y="0" width="100" height="20"/>
+				<textElement textAlignment="Right">
+					<font isBold="true"/>
+				</textElement>
+				<text><![CDATA[Faturamento]]></text>
+			</staticText>
+			<staticText>
+				<reportElement x="155" y="0" width="100" height="20"/>
+				<textElement>
+					<font isBold="true"/>
+				</textElement>
+				<text><![CDATA[Mês Referência]]></text>
+			</staticText>
+		</band>
+	</columnHeader>
+	<detail>
+		<band height="20" splitType="Stretch">
+			<textField pattern="#,##0.00">
+				<reportElement x="287" y="0" width="100" height="20"/>
+				<textElement textAlignment="Right"/>
+				<textFieldExpression class="java.math.BigDecimal"><![CDATA[$F{VLRNOTA}]]></textFieldExpression>
+			</textField>
+			<textField>
+				<reportElement x="155" y="0" width="100" height="20"/>
+				<textElement verticalAlignment="Top"/>
+				<textFieldExpression class="java.lang.String"><![CDATA[$F{MES}]]></textFieldExpression>
+			</textField>
+		</band>
+	</detail>
+	<columnFooter>
+		<band splitType="Stretch"/>
+	</columnFooter>
+	<pageFooter>
+		<band splitType="Stretch"/>
+	</pageFooter>
+	<summary>
+		<band height="214" splitType="Stretch">
+			<textField pattern="#,##0.00">
+				<reportElement x="287" y="0" width="100" height="20"/>
+				<textElement textAlignment="Right">
+					<font isBold="true"/>
+				</textElement>
+				<textFieldExpression class="java.math.BigDecimal"><![CDATA[$V{V_VLRNOTA}]]></textFieldExpression>
+			</textField>
+			<staticText>
+				<reportElement x="155" y="0" width="100" height="20"/>
+				<textElement>
+					<font isBold="true"/>
+				</textElement>
+				<text><![CDATA[TOTAL]]></text>
+			</staticText>
+			<line>
+				<reportElement x="152" y="117" width="250" height="1"/>
+			</line>
+			<textField>
+				<reportElement x="152" y="117" width="250" height="46"/>
+				<textElement textAlignment="Center" markup="none">
+					<font isBold="false"/>
+				</textElement>
+				<textFieldExpression class="java.lang.String"><![CDATA["ROCHA CONTROLLER LTDA \n"+
+"CNPJ: 13.149.926/0001-95 \n"+
+"CRC 11.393"]]></textFieldExpression>
+			</textField>
+		</band>
+	</summary>
+</jasperReport>
